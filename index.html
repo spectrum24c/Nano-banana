@@ -3,16 +3,18 @@
 <head>
     <meta charset="UTF-8">
     <meta name="viewport" content="width=device-width, initial-scale=1.0">
-    <title>Nano Banana (Image Preview) Generator</title>
-    <!-- Load Tailwind CSS -->
+    <title>AI Image Generator</title>
     <script src="https://cdn.tailwindcss.com"></script>
     <style>
         @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
         body {
             font-family: 'Inter', sans-serif;
-            background-color: #f7f7f9;
+            background-color: #1a1a1a;
+            color: #f0f0f0;
         }
-        /* Simple spinner CSS for the loading state */
+        .container-card {
+            background-color: #2c2c2c;
+        }
         .spinner {
             border: 4px solid rgba(255, 255, 255, 0.3);
             border-radius: 50%;
@@ -25,39 +27,50 @@
             0% { transform: rotate(0deg); }
             100% { transform: rotate(360deg); }
         }
+        /* Custom scrollbar for better aesthetics */
+        ::-webkit-scrollbar {
+            width: 8px;
+        }
+        ::-webkit-scrollbar-track {
+            background: #2c2c2c;
+        }
+        ::-webkit-scrollbar-thumb {
+            background: #555;
+            border-radius: 4px;
+        }
+        ::-webkit-scrollbar-thumb:hover {
+            background: #777;
+        }
     </style>
 </head>
 <body class="p-4 sm:p-8 flex justify-center min-h-screen">
 
-    <div class="w-full max-w-2xl bg-white p-6 sm:p-10 rounded-2xl shadow-2xl border border-gray-100">
-        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 text-center mb-2">
+    <div class="w-full max-w-2xl container-card p-6 sm:p-10 rounded-2xl shadow-2xl border border-gray-700">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-white text-center mb-2">
             AI Image Generator
         </h1>
-        <p class="text-center text-gray-500 mb-8">
-            Using the <span class="font-semibold text-orange-600">Nano Banana (gemini-2.5-flash-image-preview)</span> Model
+        <p class="text-center text-gray-400 mb-8">
+            Powered by <span class="font-semibold text-orange-400">Nano Banana (gemini-2.5-flash-image-preview)</span> Model
         </p>
 
-        <!-- Input and Control Area -->
-        <div class="space-y-4 mb-8">
-            <input type="text" id="prompt-input" placeholder="Enter a descriptive prompt (e.g., 'A golden retriever wearing a tiny spacesuit, realistic, photorealistic')"
-                   class="w-full p-3 border border-gray-300 rounded-xl focus:ring-orange-500 focus:border-orange-500 transition duration-150 shadow-inner">
+        <div class="space-y-6 mb-10">
+            <input type="text" id="prompt-input" placeholder="A golden retriever wearing a tiny spacesuit, realistic, photorealistic..."
+                   class="w-full p-4 border border-gray-600 bg-gray-800 text-white rounded-xl focus:ring-orange-500 focus:border-orange-500 transition duration-150 shadow-inner placeholder-gray-500">
             <button id="generate-button"
-                    class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition duration-300 shadow-md flex items-center justify-center disabled:opacity-50"
+                    class="w-full bg-orange-600 hover:bg-orange-500 text-white font-bold py-4 rounded-xl transition duration-300 shadow-md flex items-center justify-center disabled:opacity-40 disabled:cursor-not-allowed"
                     disabled>
-                <span id="button-text">Generate Image</span>
-                <div id="loading-spinner" class="spinner hidden ml-3"></div>
+                <span id="button-text" class="text-lg">Generate Image</span>
+                <div id="loading-spinner" class="spinner hidden ml-4"></div>
             </button>
         </div>
 
-        <!-- Output and Status Area -->
         <div id="output-area" class="text-center">
-            <div id="status-message" class="text-gray-500 text-sm mb-4 min-h-[20px]">
-                Enter a prompt and click "Generate Image" to begin.
+            <div id="status-message" class="text-gray-400 text-sm mb-6 min-h-[20px]">
+                Enter a prompt to start creating.
             </div>
 
-            <!-- Image Container -->
-            <div id="image-container" class="bg-gray-200 w-full aspect-square rounded-xl flex items-center justify-center overflow-hidden shadow-inner">
-                <p class="text-gray-400">Your generated image will appear here.</p>
+            <div id="image-container" class="bg-gray-800 w-full aspect-square rounded-xl flex items-center justify-center overflow-hidden shadow-2xl border border-gray-700">
+                <p class="text-gray-500 p-4 text-sm">Your generated image will appear here.</p>
             </div>
         </div>
 
@@ -66,7 +79,7 @@
     <script>
         // --- Gemini API Setup ---
         const MODEL_NAME = "gemini-2.5-flash-image-preview";
-        const apiKey = ""; // Canvas will inject the API key here
+        const apiKey = "AIzaSyDOphjQHd-fkDuUNcZ3fXbTN7ePfonOcso";
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
         // --- DOM Elements ---
@@ -80,7 +93,6 @@
         // Initial setup
         document.addEventListener('DOMContentLoaded', () => {
             promptInput.addEventListener('input', () => {
-                // Enable button only if prompt is not empty
                 generateButton.disabled = promptInput.value.trim().length < 5;
             });
 
@@ -98,10 +110,14 @@
             if (isLoading) {
                 buttonText.textContent = 'Generating...';
                 loadingSpinner.classList.remove('hidden');
-                statusMessage.textContent = 'Please wait, generating image... (This can take 5-10 seconds)';
+                statusMessage.textContent = 'Please wait, generating image...';
+                statusMessage.classList.remove('text-gray-400');
+                statusMessage.classList.add('text-orange-400');
             } else {
                 buttonText.textContent = 'Generate Image';
                 loadingSpinner.classList.add('hidden');
+                statusMessage.classList.remove('text-orange-400');
+                statusMessage.classList.add('text-gray-400');
             }
         }
 
@@ -125,31 +141,26 @@
                         return response;
                     }
 
-                    // Check for throttling (429) or transient errors (5xx)
                     if (response.status === 429 || response.status >= 500) {
                         if (i < maxRetries - 1) {
-                            // console.warn(`Request failed with status ${response.status}. Retrying in ${delay / 1000}s...`);
                             await new Promise(resolve => setTimeout(resolve, delay));
-                            delay *= 2; // Exponential backoff
+                            delay *= 2;
                             continue;
                         }
                     }
-                    // For other non-OK statuses, throw an error
                     throw new Error(`API Error: HTTP status ${response.status}`);
 
                 } catch (error) {
                     if (i < maxRetries - 1) {
-                        // console.error(`Fetch failed: ${error.message}. Retrying in ${delay / 1000}s...`);
                         await new Promise(resolve => setTimeout(resolve, delay));
-                        delay *= 2; // Exponential backoff
+                        delay *= 2;
                         continue;
                     }
-                    throw error; // Re-throw if maximum retries reached
+                    throw error;
                 }
             }
             throw new Error("Failed to fetch image after multiple retries.");
         }
-
 
         /**
          * Main function to call the Gemini API for image generation.
@@ -162,14 +173,13 @@
             }
 
             setLoading(true);
-            imageContainer.innerHTML = ''; // Clear previous image
+            imageContainer.innerHTML = '';
 
             const payload = {
                 contents: [{
                     parts: [{ text: prompt }]
                 }],
                 generationConfig: {
-                    // This configuration tells the model we expect an image in the response
                     responseModalities: ['TEXT', 'IMAGE']
                 },
             };
@@ -181,14 +191,12 @@
                 const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
 
                 if (base64Data) {
-                    // Construct the data URL for a PNG image
                     const imageUrl = `data:image/png;base64,${base64Data}`;
 
-                    // Create and display the image element
                     const img = document.createElement('img');
                     img.src = imageUrl;
                     img.alt = prompt;
-                    img.className = 'w-full h-full object-cover rounded-xl shadow-lg transition duration-500 hover:scale-[1.02] cursor-pointer';
+                    img.className = 'w-full h-full object-contain rounded-xl transition duration-500 hover:scale-[1.02] cursor-pointer';
 
                     imageContainer.innerHTML = '';
                     imageContainer.appendChild(img);
@@ -197,13 +205,13 @@
                 } else {
                     const safetyReason = result?.candidates?.[0]?.finishReason === 'SAFETY' ? ' (Reason: Content blocked by safety settings.)' : '';
                     statusMessage.textContent = `Generation failed or no image data returned. ${safetyReason}`;
-                    imageContainer.innerHTML = '<p class="text-red-500 p-4">Could not generate image. Please try a different prompt.</p>';
+                    imageContainer.innerHTML = '<p class="text-red-500 p-4 text-sm">Could not generate image. Please try a different prompt.</p>';
                 }
 
             } catch (error) {
                 console.error("Error during image generation:", error);
                 statusMessage.textContent = `An unexpected error occurred: ${error.message}`;
-                imageContainer.innerHTML = '<p class="text-red-500 p-4">Error connecting to the generation service.</p>';
+                imageContainer.innerHTML = '<p class="text-red-500 p-4 text-sm">Error connecting to the generation service.</p>';
             } finally {
                 setLoading(false);
             }
