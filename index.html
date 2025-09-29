@@ -1,0 +1,213 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Nano Banana (Image Preview) Generator</title>
+    <!-- Load Tailwind CSS -->
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        @import url('https://fonts.googleapis.com/css2?family=Inter:wght@100..900&display=swap');
+        body {
+            font-family: 'Inter', sans-serif;
+            background-color: #f7f7f9;
+        }
+        /* Simple spinner CSS for the loading state */
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-radius: 50%;
+            border-top: 4px solid #f97316;
+            width: 30px;
+            height: 30px;
+            animation: spin 1s linear infinite;
+        }
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+    </style>
+</head>
+<body class="p-4 sm:p-8 flex justify-center min-h-screen">
+
+    <div class="w-full max-w-2xl bg-white p-6 sm:p-10 rounded-2xl shadow-2xl border border-gray-100">
+        <h1 class="text-3xl sm:text-4xl font-extrabold text-gray-900 text-center mb-2">
+            AI Image Generator
+        </h1>
+        <p class="text-center text-gray-500 mb-8">
+            Using the <span class="font-semibold text-orange-600">Nano Banana (gemini-2.5-flash-image-preview)</span> Model
+        </p>
+
+        <!-- Input and Control Area -->
+        <div class="space-y-4 mb-8">
+            <input type="text" id="prompt-input" placeholder="Enter a descriptive prompt (e.g., 'A golden retriever wearing a tiny spacesuit, realistic, photorealistic')"
+                   class="w-full p-3 border border-gray-300 rounded-xl focus:ring-orange-500 focus:border-orange-500 transition duration-150 shadow-inner">
+            <button id="generate-button"
+                    class="w-full bg-orange-600 hover:bg-orange-700 text-white font-bold py-3 rounded-xl transition duration-300 shadow-md flex items-center justify-center disabled:opacity-50"
+                    disabled>
+                <span id="button-text">Generate Image</span>
+                <div id="loading-spinner" class="spinner hidden ml-3"></div>
+            </button>
+        </div>
+
+        <!-- Output and Status Area -->
+        <div id="output-area" class="text-center">
+            <div id="status-message" class="text-gray-500 text-sm mb-4 min-h-[20px]">
+                Enter a prompt and click "Generate Image" to begin.
+            </div>
+
+            <!-- Image Container -->
+            <div id="image-container" class="bg-gray-200 w-full aspect-square rounded-xl flex items-center justify-center overflow-hidden shadow-inner">
+                <p class="text-gray-400">Your generated image will appear here.</p>
+            </div>
+        </div>
+
+    </div>
+
+    <script>
+        // --- Gemini API Setup ---
+        const MODEL_NAME = "gemini-2.5-flash-image-preview";
+        const apiKey = ""; // Canvas will inject the API key here
+        const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
+
+        // --- DOM Elements ---
+        const promptInput = document.getElementById('prompt-input');
+        const generateButton = document.getElementById('generate-button');
+        const buttonText = document.getElementById('button-text');
+        const loadingSpinner = document.getElementById('loading-spinner');
+        const statusMessage = document.getElementById('status-message');
+        const imageContainer = document.getElementById('image-container');
+
+        // Initial setup
+        document.addEventListener('DOMContentLoaded', () => {
+            promptInput.addEventListener('input', () => {
+                // Enable button only if prompt is not empty
+                generateButton.disabled = promptInput.value.trim().length < 5;
+            });
+
+            generateButton.addEventListener('click', generateImage);
+        });
+
+        // --- Utility Functions ---
+
+        /**
+         * Sets the loading state for the UI
+         * @param {boolean} isLoading
+         */
+        function setLoading(isLoading) {
+            generateButton.disabled = isLoading || promptInput.value.trim().length < 5;
+            if (isLoading) {
+                buttonText.textContent = 'Generating...';
+                loadingSpinner.classList.remove('hidden');
+                statusMessage.textContent = 'Please wait, generating image... (This can take 5-10 seconds)';
+            } else {
+                buttonText.textContent = 'Generate Image';
+                loadingSpinner.classList.add('hidden');
+            }
+        }
+
+        /**
+         * Fetches data with exponential backoff for handling throttling/transient errors.
+         * @param {object} payload - The request payload.
+         * @param {number} maxRetries - Maximum number of retries.
+         * @param {number} delay - Initial delay in milliseconds.
+         * @returns {Promise<Response>}
+         */
+        async function fetchWithBackoff(payload, maxRetries = 5, delay = 1000) {
+            for (let i = 0; i < maxRetries; i++) {
+                try {
+                    const response = await fetch(API_URL, {
+                        method: 'POST',
+                        headers: { 'Content-Type': 'application/json' },
+                        body: JSON.stringify(payload)
+                    });
+
+                    if (response.ok) {
+                        return response;
+                    }
+
+                    // Check for throttling (429) or transient errors (5xx)
+                    if (response.status === 429 || response.status >= 500) {
+                        if (i < maxRetries - 1) {
+                            // console.warn(`Request failed with status ${response.status}. Retrying in ${delay / 1000}s...`);
+                            await new Promise(resolve => setTimeout(resolve, delay));
+                            delay *= 2; // Exponential backoff
+                            continue;
+                        }
+                    }
+                    // For other non-OK statuses, throw an error
+                    throw new Error(`API Error: HTTP status ${response.status}`);
+
+                } catch (error) {
+                    if (i < maxRetries - 1) {
+                        // console.error(`Fetch failed: ${error.message}. Retrying in ${delay / 1000}s...`);
+                        await new Promise(resolve => setTimeout(resolve, delay));
+                        delay *= 2; // Exponential backoff
+                        continue;
+                    }
+                    throw error; // Re-throw if maximum retries reached
+                }
+            }
+            throw new Error("Failed to fetch image after multiple retries.");
+        }
+
+
+        /**
+         * Main function to call the Gemini API for image generation.
+         */
+        async function generateImage() {
+            const prompt = promptInput.value.trim();
+            if (!prompt) {
+                statusMessage.textContent = 'Please enter a prompt.';
+                return;
+            }
+
+            setLoading(true);
+            imageContainer.innerHTML = ''; // Clear previous image
+
+            const payload = {
+                contents: [{
+                    parts: [{ text: prompt }]
+                }],
+                generationConfig: {
+                    // This configuration tells the model we expect an image in the response
+                    responseModalities: ['TEXT', 'IMAGE']
+                },
+            };
+
+            try {
+                const response = await fetchWithBackoff(payload);
+                const result = await response.json();
+
+                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+
+                if (base64Data) {
+                    // Construct the data URL for a PNG image
+                    const imageUrl = `data:image/png;base64,${base64Data}`;
+
+                    // Create and display the image element
+                    const img = document.createElement('img');
+                    img.src = imageUrl;
+                    img.alt = prompt;
+                    img.className = 'w-full h-full object-cover rounded-xl shadow-lg transition duration-500 hover:scale-[1.02] cursor-pointer';
+
+                    imageContainer.innerHTML = '';
+                    imageContainer.appendChild(img);
+
+                    statusMessage.textContent = 'Image generated successfully!';
+                } else {
+                    const safetyReason = result?.candidates?.[0]?.finishReason === 'SAFETY' ? ' (Reason: Content blocked by safety settings.)' : '';
+                    statusMessage.textContent = `Generation failed or no image data returned. ${safetyReason}`;
+                    imageContainer.innerHTML = '<p class="text-red-500 p-4">Could not generate image. Please try a different prompt.</p>';
+                }
+
+            } catch (error) {
+                console.error("Error during image generation:", error);
+                statusMessage.textContent = `An unexpected error occurred: ${error.message}`;
+                imageContainer.innerHTML = '<p class="text-red-500 p-4">Error connecting to the generation service.</p>';
+            } finally {
+                setLoading(false);
+            }
+        }
+    </script>
+</body>
+</html>
