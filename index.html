@@ -50,7 +50,7 @@
             AI Image Generator
         </h1>
         <p class="text-center text-gray-400 mb-8">
-            Powered by <span class="font-semibold text-orange-400">Nano Banana (gemini-2.5-flash-image-preview)</span> Model
+            Powered by <span class="font-semibold text-orange-400">Imagen 4.0 Ultra (preview)</span> Model
         </p>
 
         <div class="space-y-6 mb-10">
@@ -78,7 +78,7 @@
 
     <script>
         // --- Gemini API Setup ---
-        const MODEL_NAME = "gemini-2.5-flash-image-preview";
+        const MODEL_NAME = "models/imagen-4.0-ultra-generate-preview-06-06";
         const apiKey = "AIzaSyD7fDLMhyMT99oTEOMRetmWDxrvSOEd7yI";
         const API_URL = `https://generativelanguage.googleapis.com/v1beta/models/${MODEL_NAME}:generateContent?key=${apiKey}`;
 
@@ -176,19 +176,26 @@
             imageContainer.innerHTML = '';
 
             const payload = {
-                contents: [{
-                    parts: [{ text: prompt }]
-                }],
+                contents: [
+                    {
+                        parts: [
+                            { text: prompt }
+                        ]
+                    }
+                ],
                 generationConfig: {
-                    responseModalities: ['TEXT', 'IMAGE']
-                },
+                    imageSize: {
+                        width: 1024,
+                        height: 1024
+                    }
+                }
             };
 
             try {
                 const response = await fetchWithBackoff(payload);
                 const result = await response.json();
 
-                const base64Data = result?.candidates?.[0]?.content?.parts?.find(p => p.inlineData)?.inlineData?.data;
+                const base64Data = result?.candidates?.[0]?.content?.parts?.[0]?.inlineData?.data;
 
                 if (base64Data) {
                     const imageUrl = `data:image/png;base64,${base64Data}`;
